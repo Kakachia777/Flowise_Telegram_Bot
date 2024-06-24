@@ -18,7 +18,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10001))  # Use the detected port
+PORT = int(os.getenv('PORT', 10001))  # Use a different port if 10000 is occupied
 
 user_data = {}
 
@@ -119,6 +119,7 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
 
     except Exception as error:
         logging.error('Error handling Telegram message for user %d: %s', user_id, error)
+        logging.error(traceback.format_exc())
 
 async def wait_and_check(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
     user_bots = user_data[user_id]
@@ -170,18 +171,30 @@ async def health_check():
     return {"status": "healthy"}
 
 def run_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=PORT)
+    except Exception as e:
+        logging.error(f"Exception in run_fastapi: {e}")
+        logging.error(traceback.format_exc())
+    finally:
+        logging.info("FastAPI application is stopping.")
 
 async def run_telegram_bot():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-    application.add_handler(ChatMemberHandler(chat_member_updated))
+    try:
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+        application.add_handler(ChatMemberHandler(chat_member_updated))
 
-    logging.info('Telegram bot started.')
+        logging.info('Telegram bot started.')
 
-    await application.initialize()
-    await application.start()
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+        await application.initialize()
+        await application.start()
+        await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logging.error(f"Exception in run_telegram_bot: {e}")
+        logging.error(traceback.format_exc())
+    finally:
+        logging.info("Telegram bot is stopping.")
 
 async def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
