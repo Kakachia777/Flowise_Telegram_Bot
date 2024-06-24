@@ -18,7 +18,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10000))  # Use the detected port
+PORT = int(os.getenv('PORT', 10001))  # Use the detected port
 
 user_data = {}
 
