@@ -178,7 +178,6 @@ async def run_telegram_bot():
 
     await telegram_app.initialize()
     await telegram_app.start()
-    await telegram_app.update_bot()  # Ensure the bot's information is up to date
     asyncio.create_task(telegram_app.run_polling(allowed_updates=Update.ALL_TYPES))
 
 @app.on_event("startup")
