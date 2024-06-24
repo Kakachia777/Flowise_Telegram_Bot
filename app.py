@@ -178,7 +178,7 @@ async def run_telegram_bot():
 
     await telegram_app.initialize()
     await telegram_app.start()
-    await telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
+    await telegram_app.updater.start_polling()
 
 @app.on_event("startup")
 async def startup_event():
