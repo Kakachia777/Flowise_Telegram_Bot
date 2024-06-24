@@ -165,7 +165,6 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-# Global variable to store the Telegram bot application
 telegram_app = None
 
 async def run_telegram_bot():
@@ -183,7 +182,7 @@ async def run_telegram_bot():
 @app.on_event("startup")
 async def startup_event():
     logging.info("Starting up...")
-    asyncio.create_task(run_telegram_bot())
+    await run_telegram_bot()
     logging.info("Startup complete.")
 
 @app.on_event("shutdown")
@@ -197,4 +196,5 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    print("Starting the application...")
     uvicorn.run(app, host="0.0.0.0", port=PORT)
