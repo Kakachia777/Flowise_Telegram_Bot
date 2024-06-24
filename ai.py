@@ -3,13 +3,12 @@ import logging
 import asyncio
 import time
 import random
+import requests
+import uvicorn
+from fastapi import FastAPI, BackgroundTasks
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from dotenv import load_dotenv
-import requests
-import threading
-import uvicorn
-from fastapi import FastAPI
 
 load_dotenv()
 
@@ -18,7 +17,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10001))  # Use a different port if 10000 is occupied
+PORT = int(os.getenv('PORT', 10001))
 
 user_data = {}
 
@@ -42,7 +41,7 @@ class FlowiseBot:
         }
 
         max_retries = 5
-        base_delay = 1  # Starting delay in seconds
+        base_delay = 1
 
         for attempt in range(max_retries):
             try:
@@ -50,7 +49,7 @@ class FlowiseBot:
                 response.raise_for_status()
                 return response.json().get('text', 'No response text in Flowise API response')
             except requests.RequestException as error:
-                if attempt == max_retries - 1:  # If this was the last attempt
+                if attempt == max_retries - 1:
                     logging.error('Error sending to Flowise API after %d attempts: %s', max_retries, error)
                     if error.response:
                         logging.error('Response content: %s', error.response.content)
@@ -103,7 +102,6 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         elif response1.strip() == "Уточнение":
             if user_bots['wait_task']:
                 user_bots['wait_task'].cancel()
-            # Append "Уточнение" to the end of the original message
             user_bots['message_queue'].append(f"{text} Уточнение")
             await process_bot2_messages(update, context, user_id)
         elif response1 == "Ожидание":
@@ -119,7 +117,6 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
 
     except Exception as error:
         logging.error('Error handling Telegram message for user %d: %s', user_id, error)
-        logging.error(traceback.format_exc())
 
 async def wait_and_check(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
     user_bots = user_data[user_id]
@@ -139,7 +136,6 @@ async def process_bot2_messages(update: Update, context: ContextTypes.DEFAULT_TY
     messages = user_bots['message_queue']
     user_bots['message_queue'] = []
 
-    # Combine all messages into a single question
     combined_question = " ".join(messages)
 
     response2 = await bot2.get_response(combined_question, user_id, session_id)
@@ -159,7 +155,6 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['typing'] = False
 
-# Create a FastAPI app
 app = FastAPI()
 
 @app.get("/")
@@ -170,42 +165,23 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-def run_fastapi():
-    try:
-        uvicorn.run(app, host="0.0.0.0", port=PORT)
-    except Exception as e:
-        logging.error(f"Exception in run_fastapi: {e}")
-        logging.error(traceback.format_exc())
-    finally:
-        logging.info("FastAPI application is stopping.")
-
 async def run_telegram_bot():
-    try:
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-        application.add_handler(ChatMemberHandler(chat_member_updated))
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+    application.add_handler(ChatMemberHandler(chat_member_updated))
 
-        logging.info('Telegram bot started.')
+    logging.info('Telegram bot started.')
 
-        await application.initialize()
-        await application.start()
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except Exception as e:
-        logging.error(f"Exception in run_telegram_bot: {e}")
-        logging.error(traceback.format_exc())
-    finally:
-        logging.info("Telegram bot is stopping.")
+    await application.initialize()
+    await application.start()
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-async def main():
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(run_telegram_bot())
+
+if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    # Start the FastAPI application in a separate thread
-    fastapi_thread = threading.Thread(target=run_fastapi)
-    fastapi_thread.start()
-
-    # Run the Telegram bot
-    await run_telegram_bot()
-
-if __name__ == '__main__':
-    asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
