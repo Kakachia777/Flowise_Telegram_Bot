@@ -5,7 +5,7 @@ import time
 import random
 import requests
 import uvicorn
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from dotenv import load_dotenv
@@ -165,20 +165,34 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+# Global variable to store the Telegram bot application
+telegram_app = None
+
 async def run_telegram_bot():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-    application.add_handler(ChatMemberHandler(chat_member_updated))
+    global telegram_app
+    telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+    telegram_app.add_handler(ChatMemberHandler(chat_member_updated))
 
     logging.info('Telegram bot started.')
 
-    await application.initialize()
-    await application.start()
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    await telegram_app.initialize()
+    await telegram_app.start()
+    await telegram_app.update_bot()  # Ensure the bot's information is up to date
+    asyncio.create_task(telegram_app.run_polling(allowed_updates=Update.ALL_TYPES))
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(run_telegram_bot())
+    logging.info("Starting up...")
+    await run_telegram_bot()
+    logging.info("Startup complete.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logging.info("Shutting down...")
+    if telegram_app:
+        await telegram_app.stop()
+    logging.info("Shutdown complete.")
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
