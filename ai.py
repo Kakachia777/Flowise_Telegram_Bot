@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from dotenv import load_dotenv
 import requests
+from aiohttp import web
 
 load_dotenv()
 
@@ -15,6 +16,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
+PORT = int(os.getenv('PORT', 10000))  # Default port is 10000
 
 user_data = {}
 
@@ -154,6 +156,14 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['typing'] = False
 
+async def web_app():
+    async def handle(request):
+        return web.Response(text="Telegram bot is running!")
+
+    app = web.Application()
+    app.router.add_get('/', handle)
+    return app
+
 def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -163,7 +173,17 @@ def main():
     application.add_handler(ChatMemberHandler(chat_member_updated))
 
     logging.info('Telegram bot started.')
-    application.run_polling(timeout=60)
+
+    # Set up the web app
+    web_application = asyncio.get_event_loop().run_until_complete(web_app())
+    
+    # Run the bot and the web server
+    asyncio.get_event_loop().run_until_complete(
+        asyncio.gather(
+            application.run_polling(allowed_updates=Update.ALL_TYPES),
+            web._run_app(web_application, host='0.0.0.0', port=PORT)
+        )
+    )
 
 if __name__ == '__main__':
     main()
