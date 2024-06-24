@@ -178,12 +178,12 @@ async def run_telegram_bot():
 
     await telegram_app.initialize()
     await telegram_app.start()
-    asyncio.create_task(telegram_app.run_polling(allowed_updates=Update.ALL_TYPES))
+    await telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 @app.on_event("startup")
 async def startup_event():
     logging.info("Starting up...")
-    await run_telegram_bot()
+    asyncio.create_task(run_telegram_bot())
     logging.info("Startup complete.")
 
 @app.on_event("shutdown")
