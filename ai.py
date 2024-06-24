@@ -8,7 +8,8 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes, Cha
 from dotenv import load_dotenv
 import requests
 import threading
-import subprocess
+import uvicorn
+from fastapi import FastAPI
 
 load_dotenv()
 
@@ -17,7 +18,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10000))  # Default port is 10000
+PORT = int(os.getenv('PORT', 10000))  # Use the detected port
 
 user_data = {}
 
@@ -157,11 +158,32 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['typing'] = False
 
-def run_fastapi():
-    port = int(os.environ.get("PORT", 8000))
-    subprocess.run(["uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)])
+# Create a FastAPI app
+app = FastAPI()
 
-def main():
+@app.get("/")
+async def root():
+    return {"message": "Hello, this is the FastAPI application"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
+
+async def run_telegram_bot():
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+    application.add_handler(ChatMemberHandler(chat_member_updated))
+
+    logging.info('Telegram bot started.')
+
+    await application.initialize()
+    await application.start()
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+async def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -169,14 +191,8 @@ def main():
     fastapi_thread = threading.Thread(target=run_fastapi)
     fastapi_thread.start()
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-    application.add_handler(ChatMemberHandler(chat_member_updated))
-
-    logging.info('Telegram bot started.')
-
-    # Run the bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Run the Telegram bot
+    await run_telegram_bot()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
