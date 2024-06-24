@@ -7,7 +7,8 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from dotenv import load_dotenv
 import requests
-from aiohttp import web
+import threading
+import subprocess
 
 load_dotenv()
 
@@ -156,17 +157,17 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['typing'] = False
 
-async def web_app():
-    async def handle(request):
-        return web.Response(text="Telegram bot is running!")
-
-    app = web.Application()
-    app.router.add_get('/', handle)
-    return app
+def run_fastapi():
+    port = int(os.environ.get("PORT", 8000))
+    subprocess.run(["uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)])
 
 def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    # Start the FastAPI application in a separate thread
+    fastapi_thread = threading.Thread(target=run_fastapi)
+    fastapi_thread.start()
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
@@ -174,16 +175,8 @@ def main():
 
     logging.info('Telegram bot started.')
 
-    # Set up the web app
-    web_application = asyncio.get_event_loop().run_until_complete(web_app())
-    
-    # Run the bot and the web server
-    asyncio.get_event_loop().run_until_complete(
-        asyncio.gather(
-            application.run_polling(allowed_updates=Update.ALL_TYPES),
-            web._run_app(web_application, host='0.0.0.0', port=PORT)
-        )
-    )
+    # Run the bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
