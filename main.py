@@ -17,7 +17,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10002))
+PORT = int(os.getenv('PORT', 10001))
 
 user_data = {}
 
@@ -176,10 +176,8 @@ async def run_telegram_bot():
     print("Starting Telegram bot")
     await application.run_polling(drop_pending_updates=True)
 
-async def start_fastapi():
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
 
 async def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -187,9 +185,12 @@ async def main():
 
     print("Starting the application...")
     
+    # Run the FastAPI app in a separate thread
+    fastapi_thread = asyncio.to_thread(run_fastapi)
+    
     # Run both the FastAPI app and Telegram bot concurrently
     await asyncio.gather(
-        start_fastapi(),
+        fastapi_thread,
         run_telegram_bot()
     )
 
