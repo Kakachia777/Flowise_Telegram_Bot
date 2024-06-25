@@ -15,7 +15,6 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 10001))
 
 user_data = {}
 
@@ -164,7 +163,7 @@ async def main():
     await application.initialize()
     await application.start()
     
-    print(f"Starting Telegram bot on http://0.0.0.0:{PORT}")
+    print("Starting Telegram bot")
     await application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
