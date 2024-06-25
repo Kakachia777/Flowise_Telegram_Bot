@@ -17,7 +17,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = 0  # Let the OS assign an available port
+PORT = int(os.getenv('PORT', 0))  # Use environment variable or default to 8000
 
 user_data = {}
 
@@ -51,9 +51,13 @@ class FlowiseBot:
 
         for attempt in range(max_retries):
             try:
-                response = await asyncio.to_thread(requests.post, self.api_url, json=payload, headers=headers)
+                async with asyncio.timeout(30):  # 30-second timeout
+                    response = await asyncio.to_thread(requests.post, self.api_url, json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json().get('text', 'No response text in Flowise API response')
+            except asyncio.TimeoutError:
+                logger.error('Timeout occurred while contacting Flowise API')
+                return "Timeout occurred while contacting Flowise API."
             except requests.RequestException as error:
                 if attempt == max_retries - 1:
                     logger.error('Error sending to Flowise API after %d attempts: %s', max_retries, error)
@@ -100,8 +104,7 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         response1 = await bot1.get_response(text, user_id, session_id)
         logger.info('Bot1 response: %s', response1)
 
-        if "Спецзапрос" in response1:
-            if user_bots['wait_task']:
+        if "Спецзапрос" in            if user_bots['wait_task']:
                 user_bots['wait_task'].cancel()
             user_bots['message_queue'].append(text)
             await process_bot2_messages(update, context, user_id)
@@ -170,33 +173,27 @@ async def health_check():
     return {"status": "healthy"}
 
 async def run_telegram_bot():
-    try:
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-        application.add_handler(ChatMemberHandler(chat_member_updated))
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+    application.add_handler(ChatMemberHandler(chat_member_updated))
 
-        await application.initialize()
-        await application.start()
-        
-        logger.info("Starting Telegram bot")
-        await application.run_polling(drop_pending_updates=True)
-    except Exception as e:
-        logger.error(f"Error in Telegram bot: {e}", exc_info=True)
+    await application.initialize()
+    await application.start()
+    
+    logger.info("Starting Telegram bot")
+    await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
-def run_fastapi():
+async def run_fastapi():
     config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
     server = uvicorn.Server(config)
-    server.run()
+    await server.serve()
 
 async def main():
     logger.info("Starting the application...")
     
-    # Run the FastAPI app in a separate thread
-    fastapi_thread = asyncio.to_thread(run_fastapi)
-    
     # Run both the FastAPI app and Telegram bot concurrently
     await asyncio.gather(
-        fastapi_thread,
+        run_fastapi(),
         run_telegram_bot()
     )
 
