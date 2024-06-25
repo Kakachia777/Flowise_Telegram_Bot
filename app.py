@@ -173,28 +173,32 @@ async def run_telegram_bot():
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
     telegram_app.add_handler(ChatMemberHandler(chat_member_updated))
 
-    logging.info('Telegram bot started.')
-
     await telegram_app.initialize()
     await telegram_app.start()
-    await telegram_app.updater.start_polling()
+    await telegram_app.updater.start_polling(drop_pending_updates=True)
+    
+    logging.info('Telegram bot started.')
 
-@app.on_event("startup")
-async def startup_event():
-    logging.info("Starting up...")
-    await run_telegram_bot()
-    logging.info("Startup complete.")
+    # Keep the bot running
+    while True:
+        await asyncio.sleep(1)
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    logging.info("Shutting down...")
-    if telegram_app:
-        await telegram_app.stop()
-    logging.info("Shutdown complete.")
+async def start_fastapi():
+    config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
-if __name__ == '__main__':
+async def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     print("Starting the application...")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    
+    # Run both the FastAPI app and Telegram bot concurrently
+    await asyncio.gather(
+        start_fastapi(),
+        run_telegram_bot()
+    )
+
+if __name__ == '__main__':
+    asyncio.run(main())
