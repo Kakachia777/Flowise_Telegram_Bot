@@ -17,7 +17,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
-PORT = int(os.getenv('PORT', 0))  # Use environment variable or default to 8000
+PORT = int(os.environ.get('PORT', 10000))  # Render.com uses PORT environment variable
 
 user_data = {}
 
@@ -104,7 +104,8 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         response1 = await bot1.get_response(text, user_id, session_id)
         logger.info('Bot1 response: %s', response1)
 
-        if "Спецзапрос" in            if user_bots['wait_task']:
+        if "Спецзапрос" in response1:
+            if user_bots['wait_task']:
                 user_bots['wait_task'].cancel()
             user_bots['message_queue'].append(text)
             await process_bot2_messages(update, context, user_id)
@@ -183,17 +184,15 @@ async def run_telegram_bot():
     logger.info("Starting Telegram bot")
     await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
-async def run_fastapi():
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
 
 async def main():
     logger.info("Starting the application...")
     
     # Run both the FastAPI app and Telegram bot concurrently
     await asyncio.gather(
-        run_fastapi(),
+        asyncio.to_thread(run_fastapi),
         run_telegram_bot()
     )
 
