@@ -68,7 +68,7 @@ class FlowiseBot:
         return "Maximum retries reached. Unable to contact Flowise API."
 
 def get_user_bots(user_id):
-    if user_id not in user_data):
+    if user_id not in user_data:
         user_data[user_id] = {
             'bot1': FlowiseBot(api_url=FLOWISE_BOT_1_URL, api_token=FLOWISE_BOT_1_TOKEN),
             'bot2': FlowiseBot(api_url=FLOWISE_BOT_2_URL, api_token=FLOWISE_BOT_2_TOKEN),
