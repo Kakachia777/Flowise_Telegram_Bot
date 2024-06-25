@@ -17,6 +17,7 @@ FLOWISE_BOT_1_URL = os.getenv('FLOWISE_BOT_1_URL')
 FLOWISE_BOT_1_TOKEN = os.getenv('FLOWISE_BOT_1_TOKEN')
 FLOWISE_BOT_2_URL = os.getenv('FLOWISE_BOT_2_URL')
 FLOWISE_BOT_2_TOKEN = os.getenv('FLOWISE_BOT_2_TOKEN')
+PORT = 0  # Let the OS assign an available port
 
 user_data = {}
 
@@ -67,7 +68,7 @@ class FlowiseBot:
         return "Maximum retries reached. Unable to contact Flowise API."
 
 def get_user_bots(user_id):
-    if user_id not in user_data:
+    if user_id not in user_data):
         user_data[user_id] = {
             'bot1': FlowiseBot(api_url=FLOWISE_BOT_1_URL, api_token=FLOWISE_BOT_1_TOKEN),
             'bot2': FlowiseBot(api_url=FLOWISE_BOT_2_URL, api_token=FLOWISE_BOT_2_TOKEN),
@@ -183,7 +184,9 @@ async def run_telegram_bot():
         logger.error(f"Error in Telegram bot: {e}", exc_info=True)
 
 def run_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
+    server = uvicorn.Server(config)
+    server.run()
 
 async def main():
     logger.info("Starting the application...")
