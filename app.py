@@ -4,8 +4,6 @@ import asyncio
 import time
 import random
 import requests
-import uvicorn
-from fastapi import FastAPI
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from dotenv import load_dotenv
@@ -155,50 +153,19 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['typing'] = False
 
-app = FastAPI()
-
-@app.get("/")
-async def root():
-    return {"message": "Hello, this is the FastAPI application"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-telegram_app = None
-
-async def run_telegram_bot():
-    global telegram_app
-    telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-    telegram_app.add_handler(ChatMemberHandler(chat_member_updated))
-
-    await telegram_app.initialize()
-    await telegram_app.start()
-    await telegram_app.updater.start_polling(drop_pending_updates=True)
-    
-    logging.info('Telegram bot started.')
-
-    # Keep the bot running
-    while True:
-        await asyncio.sleep(1)
-
-async def start_fastapi():
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
-
 async def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    print("Starting the application...")
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+    application.add_handler(ChatMemberHandler(chat_member_updated))
+
+    await application.initialize()
+    await application.start()
     
-    # Run both the FastAPI app and Telegram bot concurrently
-    await asyncio.gather(
-        start_fastapi(),
-        run_telegram_bot()
-    )
+    print(f"Starting Telegram bot on http://0.0.0.0:{PORT}")
+    await application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     asyncio.run(main())
