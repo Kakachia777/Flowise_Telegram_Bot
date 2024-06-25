@@ -22,6 +22,10 @@ user_data = {}
 
 app = FastAPI()
 
+# Set up logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 class FlowiseBot:
     def __init__(self, api_url, api_token):
         self.api_url = api_url
@@ -51,13 +55,13 @@ class FlowiseBot:
                 return response.json().get('text', 'No response text in Flowise API response')
             except requests.RequestException as error:
                 if attempt == max_retries - 1:
-                    logging.error('Error sending to Flowise API after %d attempts: %s', max_retries, error)
+                    logger.error('Error sending to Flowise API after %d attempts: %s', max_retries, error)
                     if error.response:
-                        logging.error('Response content: %s', error.response.content)
+                        logger.error('Response content: %s', error.response.content)
                     return "Error occurred while contacting Flowise API."
                 else:
                     delay = (2 ** attempt) * base_delay + random.uniform(0, 1)
-                    logging.warning(f'Attempt {attempt + 1} failed, retrying in {delay:.2f} seconds...')
+                    logger.warning(f'Attempt {attempt + 1} failed, retrying in {delay:.2f} seconds...')
                     await asyncio.sleep(delay)
 
         return "Maximum retries reached. Unable to contact Flowise API."
@@ -86,14 +90,14 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
     text = update.message.text
 
     try:
-        logging.info('Incoming message from user %d: %s', user_id, text)
+        logger.info('Incoming message from user %d: %s', user_id, text)
 
         user_bots = get_user_bots(user_id)
         bot1 = user_bots['bot1']
         session_id = user_bots['session_id']
 
         response1 = await bot1.get_response(text, user_id, session_id)
-        logging.info('Bot1 response: %s', response1)
+        logger.info('Bot1 response: %s', response1)
 
         if "Спецзапрос" in response1:
             if user_bots['wait_task']:
@@ -117,7 +121,7 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(chat_id=chat_id, text=cleaned_response)
 
     except Exception as error:
-        logging.error('Error handling Telegram message for user %d: %s', user_id, error)
+        logger.error('Error handling Telegram message for user %d: %s', user_id, error, exc_info=True)
 
 async def wait_and_check(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
     user_bots = user_data[user_id]
@@ -140,7 +144,7 @@ async def process_bot2_messages(update: Update, context: ContextTypes.DEFAULT_TY
     combined_question = " ".join(messages)
 
     response2 = await bot2.get_response(combined_question, user_id, session_id)
-    logging.info('Bot2 response: %s', response2)
+    logger.info('Bot2 response: %s', response2)
 
     if response2:
         cleaned_response = clean_response(response2)
@@ -165,24 +169,24 @@ async def health_check():
     return {"status": "healthy"}
 
 async def run_telegram_bot():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
-    application.add_handler(ChatMemberHandler(chat_member_updated))
+    try:
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message))
+        application.add_handler(ChatMemberHandler(chat_member_updated))
 
-    await application.initialize()
-    await application.start()
-    
-    print("Starting Telegram bot")
-    await application.run_polling(drop_pending_updates=True)
+        await application.initialize()
+        await application.start()
+        
+        logger.info("Starting Telegram bot")
+        await application.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        logger.error(f"Error in Telegram bot: {e}", exc_info=True)
 
 def run_fastapi():
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
 
 async def main():
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-
-    print("Starting the application...")
+    logger.info("Starting the application...")
     
     # Run the FastAPI app in a separate thread
     fastapi_thread = asyncio.to_thread(run_fastapi)
