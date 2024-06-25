@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import requests
 import threading
 import subprocess
+import signal
 
 load_dotenv()
 
@@ -102,7 +103,6 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         elif response1.strip() == "Уточнение":
             if user_bots['wait_task']:
                 user_bots['wait_task'].cancel()
-            # Append "Уточнение" to the end of the original message
             user_bots['message_queue'].append(f"{text} Уточнение")
             await process_bot2_messages(update, context, user_id)
         elif response1 == "Ожидание":
@@ -137,7 +137,6 @@ async def process_bot2_messages(update: Update, context: ContextTypes.DEFAULT_TY
     messages = user_bots['message_queue']
     user_bots['message_queue'] = []
 
-    # Combine all messages into a single question
     combined_question = " ".join(messages)
 
     response2 = await bot2.get_response(combined_question, user_id, session_id)
@@ -159,14 +158,22 @@ async def chat_member_updated(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 def run_fastapi():
     port = int(os.environ.get("PORT", 8000))
-    subprocess.run(["uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)])
+    subprocess.Popen(["uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)])
+
+def signal_handler(signum, frame):
+    logging.info("Received signal to terminate. Ignoring...")
 
 def main():
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # Start the FastAPI application in a separate thread
     fastapi_thread = threading.Thread(target=run_fastapi)
+    fastapi_thread.daemon = True  # Set as daemon thread
     fastapi_thread.start()
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -175,8 +182,14 @@ def main():
 
     logging.info('Telegram bot started.')
 
-    # Run the bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Run the bot in a loop to ensure it restarts if it stops
+    while True:
+        try:
+            application.run_polling(allowed_updates=Update.ALL_TYPES, close_loop=False)
+        except Exception as e:
+            logging.error(f"Error in main loop: {e}")
+            logging.info("Restarting in 5 seconds...")
+            time.sleep(5)
 
 if __name__ == '__main__':
     main()
